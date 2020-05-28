@@ -63,18 +63,17 @@ class Model(LightningModule):
             [
                 A.InvertImg(p=1),
                 A.RandomGridShuffle(grid=(10, 10)),
+                A.RandomScale(0.1),
+                A.PadIfNeeded(640, 640),
                 A.RandomSizedCrop([512, 640], 640, 640),
                 A.Flip(),
-                A.Rotate(15),
-                A.RandomScale(0.1),
-                A.RandomBrightnessContrast(0.2, 0.2),
+                A.Rotate(90),
+                A.RandomBrightnessContrast(0.02, 0.02),
                 A.HueSaturationValue(0, 10, 10),
-                A.PadIfNeeded(640, 640),
-                A.RandomCrop(640, 640),
                 A.Normalize(mean, std, 1),
             ]
         )
-        self.valid_transforms = A.Compose([A.ToFloat()])
+        self.valid_transforms = A.Compose([A.InvertImg(p=1), A.Normalize(mean, std, 1),])
 
     def forward(self, x):
         x = self.net(x)
