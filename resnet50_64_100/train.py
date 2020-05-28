@@ -32,6 +32,9 @@ MIN_LR = 1e-6
 WEIGHT_DECAY = 1e-5
 FP16 = False
 
+mean = [127.66098, 127.66102, 127.66085]
+std = [10.5911, 10.5911045, 10.591107]
+
 
 def seed_everything(seed):
     random.seed(seed)
@@ -58,19 +61,17 @@ class Model(LightningModule):
 
         self.train_transforms = A.Compose(
             [
-                A.Compose(
-                    [
-                        A.OneOf([A.GaussNoise(), A.MultiplicativeNoise(elementwise=True)]),
-                        A.RandomBrightnessContrast(0.02, 0.02),
-                        A.HueSaturationValue(0, 10, 10),
-                        A.Flip(),
-                        A.RandomGridShuffle(grid=(10, 10)),
-                        A.GridDistortion(),
-                        A.Rotate()
-                    ],
-                    p=0.5,
-                ),
-                A.ToFloat(),
+                A.InvertImg(p=1),
+                A.RandomGridShuffle(grid=(10, 10)),
+                A.RandomSizedCrop([512, 640], 640, 640),
+                A.Flip(),
+                A.Rotate(15),
+                A.RandomScale(0.1),
+                A.RandomBrightnessContrast(0.2, 0.2),
+                A.HueSaturationValue(0, 10, 10),
+                A.PadIfNeeded(640, 640),
+                A.RandomCrop(640, 640),
+                A.Normalize(mean, std, 1),
             ]
         )
         self.valid_transforms = A.Compose([A.ToFloat()])
