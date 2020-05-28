@@ -2,15 +2,21 @@ import cv2 as cv
 import numpy as np
 
 
+def __rotate_image(mat, rotation_mat):
+    pass
+
+
 def rotate_image(mat, angle, rect=None):
     """
     Rotates an image (angle in degrees) and expands image to avoid cropping
     """
     height, width = mat.shape[:2]  # image shape has 3 dimensions
     image_center = (
-    width / 2, height / 2)  # getRotationMatrix2D needs coordinates in reverse order (width, height) compared to shape
+        width / 2,
+        height / 2,
+    )  # getRotationMatrix2D needs coordinates in reverse order (width, height) compared to shape
 
-    rotation_mat = cv.getRotationMatrix2D(image_center, angle, 1.)
+    rotation_mat = cv.getRotationMatrix2D(image_center, angle, 1.0)
 
     # rotation calculates the cos and sin, taking absolutes of those.
     abs_cos = abs(rotation_mat[0, 0])
@@ -25,8 +31,16 @@ def rotate_image(mat, angle, rect=None):
     rotation_mat[1, 2] += bound_h / 2 - image_center[1]
 
     # rotate image with the new bounds and translated rotation matrix
-    rotated_mat = cv.warpAffine(mat, rotation_mat, (bound_w, bound_h),
-                                borderMode=cv.BORDER_CONSTANT, borderValue=(255, 255, 255))
+    try:
+        rotated_mat = cv.warpAffine(
+            mat, rotation_mat, (bound_w, bound_h), borderMode=cv.BORDER_CONSTANT, borderValue=(255, 255, 255)
+        )
+    except cv.error:
+        # very large for warpAffine
+        rotated_mat = np.empty([bound_h, bound_w, 3], dtype=np.uint8)
+
+        # tl
+
 
     if rect is not None:
         (x, y), wh, a = rect
@@ -47,7 +61,7 @@ def rect2points(rect, image_shape):
     return tl, br
 
 
-def get_sub_image(image, rect):
+def get_sub_image(image, rect, filter_by_size=True):
     (x1, y1), (x2, y2) = rect2points(rect, image.shape)
 
     sub_image = image[y1:y2, x1:x2]
@@ -58,7 +72,7 @@ def get_sub_image(image, rect):
     if a == 0:
         s = (sub_image != 255).sum()
         total = np.prod(sub_image.shape[:2])
-        if s < 0.25 * total:
+        if filter_by_size and s < 0.25 * total:
             return None
 
         h, w = sub_image.shape[:2]
@@ -70,7 +84,7 @@ def get_sub_image(image, rect):
     rect = xy, wh, a
     sub_image, rect = rotate_image(sub_image, a, rect)
 
-    return get_sub_image(sub_image, rect)
+    return get_sub_image(sub_image, rect, filter_by_size)
 
 
 def get_minimal_image(image):
@@ -95,9 +109,11 @@ def get_minimal_image(image):
 
     height, width = image.shape[:2]  # image shape has 3 dimensions
     image_center = (
-    width / 2, height / 2)  # getRotationMatrix2D needs coordinates in reverse order (width, height) compared to shape
+        width / 2,
+        height / 2,
+    )  # getRotationMatrix2D needs coordinates in reverse order (width, height) compared to shape
 
-    rotation_mat = cv.getRotationMatrix2D(image_center, angle, 1.)
+    rotation_mat = cv.getRotationMatrix2D(image_center, angle, 1.0)
 
     # rotation calculates the cos and sin, taking absolutes of those.
     abs_cos = abs(rotation_mat[0, 0])
@@ -147,7 +163,7 @@ def get_minimal_image(image):
     result_img = np.full(result_shape + [3], 255, dtype=np.uint8)
     for sub_img in result_sub_images:
         h, w = sub_img.shape[:2]
-        result_img[offset:offset + h, :w] = sub_img
+        result_img[offset : offset + h, :w] = sub_img
         offset += h
 
     return result_img, minimal_boxes
@@ -178,8 +194,30 @@ def get_compact(image, compact_representation):
     for box in boxes:
         (x, y), (w, h), a = box
         rect = (x * scale_w, y * scale_h), (w * scale_w, h * scale_h), a
-        sub_image = get_sub_image(image, rect)
-        result_image[offset:offset + sub_image.shape[0], :sub_image.shape[1]] = sub_image
+        sub_image = get_sub_image(image, rect, filter_by_size=False)
+        result_image[offset : offset + sub_image.shape[0], : sub_image.shape[1]] = sub_image
         offset += sub_image.shape[0]
 
     return result_image
+
+
+if __name__ == "__main__":
+    import os
+    import json
+    import skimage.io
+    import matplotlib.pyplot as plt
+
+    name = "00928370e2dfeb8a507667ef1d4efcbb"
+
+    TRAIN = '../input/prostate-cancer-grade-assessment/train_images/'
+
+    with open("../input/compact_representation.json", "r") as file:
+        compact_representation = json.load(file)
+
+    key = name + '.tiff'
+    img = skimage.io.MultiImage(os.path.join(TRAIN, name + '.tiff'))[0]
+
+    img = get_compact(img, compact_representation[key])
+
+    plt.imshow(img)
+    plt.show()
