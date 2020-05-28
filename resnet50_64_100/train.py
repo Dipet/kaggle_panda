@@ -26,11 +26,11 @@ warnings.filterwarnings("ignore")
 
 NUM_EPOCHS = 32
 SEED = 0
-BATCH_SIZE = 16
-LR = 5e-4
+BATCH_SIZE = 10
+LR = 1e-4
 MIN_LR = 1e-6
 WEIGHT_DECAY = 1e-5
-FP16 = True
+FP16 = False
 
 
 def seed_everything(seed):
@@ -112,6 +112,7 @@ class Model(LightningModule):
         y_hat = torch.argmax(y_hat, 1)
         kappa = cohen_kappa_score(y.detach().cpu().numpy(), y_hat.detach().cpu().numpy(), weights="quadratic")
         tensorboard_logs = {"val_loss": avg_loss, "kappa": kappa}
+        print(f"val_loss: {avg_loss}, kappa: {kappa}")
         return {"val_loss": avg_loss, "log": tensorboard_logs, "kappa": torch.tensor(kappa)}
 
     def val_dataloader(self):
