@@ -9,14 +9,16 @@ from utils.minimal_image import get_minimal_image
 from skimage.io import MultiImage
 
 import cv2 as cv
+import numpy as np
 
 
 class TrainDataset(Dataset):
-    def __init__(self, df: pd.DataFrame, data_dir: str, transforms=None):
+    def __init__(self, df: pd.DataFrame, data_dir: str, transforms=None, outputs=6):
         self.images = [i + ".png" for i in df["image_id"]]
         self.labels = [i for i in df["isup_grade"]]
         self.data_dir = data_dir
         self.transforms = transforms
+        self.outputs = outputs
 
     def __len__(self):
         return len(self.images)
@@ -31,7 +33,9 @@ class TrainDataset(Dataset):
             img = self.transforms(image=img)["image"]
 
         img = torch.from_numpy(img.transpose(2, 0, 1))
-        return img, label
+        res_label = np.zeros([self.outputs], dtype=np.float32)
+        res_label[label] = 1
+        return img, res_label
 
 
 class InferDataset(Dataset):
