@@ -41,7 +41,6 @@ def rotate_image(mat, angle, rect=None):
 
         # tl
 
-
     if rect is not None:
         (x, y), wh, a = rect
         xy = np.array([x, y, 1]) @ rotation_mat.T
@@ -209,13 +208,13 @@ if __name__ == "__main__":
 
     name = "00928370e2dfeb8a507667ef1d4efcbb"
 
-    TRAIN = '../input/prostate-cancer-grade-assessment/train_images/'
+    TRAIN = "../input/prostate-cancer-grade-assessment/train_images/"
 
     with open("../input/compact_representation.json", "r") as file:
         compact_representation = json.load(file)
 
-    key = name + '.tiff'
-    img = skimage.io.MultiImage(os.path.join(TRAIN, name + '.tiff'))[0]
+    key = name + ".tiff"
+    img = skimage.io.MultiImage(os.path.join(TRAIN, name + ".tiff"))[0]
 
     img = get_compact(img, compact_representation[key])
 

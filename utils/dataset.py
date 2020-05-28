@@ -33,13 +33,11 @@ class TrainDataset(Dataset):
             img = self.transforms(image=img)["image"]
 
         img = torch.from_numpy(img.transpose(2, 0, 1))
-        res_label = np.zeros([self.outputs], dtype=np.float32)
-        res_label[label] = 1
-        return img, res_label
+        return img, label
 
 
 class InferDataset(Dataset):
-    def __init__(self, images: list, data_dir: str, tile_size: int, num_tiles: int, tiff_scale=-1,  transforms=None):
+    def __init__(self, images: list, data_dir: str, tile_size: int, num_tiles: int, tiff_scale=-1, transforms=None):
         self.images = images
         self.data_dir = data_dir
         self.transforms = transforms
@@ -76,17 +74,22 @@ if __name__ == "__main__":
     with open("../input/compact_representation.json", "r") as file:
         compact_representation = json.load(file)
 
-    transforms = A.Compose([
-        A.Compose([
-            A.OneOf([A.GaussNoise(), A.MultiplicativeNoise(elementwise=True)]),
-            A.RandomBrightnessContrast(0.02, 0.02),
-            A.HueSaturationValue(0, 10, 10),
-            A.Flip(),
-            A.RandomGridShuffle(grid=(10, 10)),
-            A.GridDistortion(),
-        ], p=0.5),
-        A.ToFloat()
-    ])
+    transforms = A.Compose(
+        [
+            A.Compose(
+                [
+                    A.OneOf([A.GaussNoise(), A.MultiplicativeNoise(elementwise=True)]),
+                    A.RandomBrightnessContrast(0.02, 0.02),
+                    A.HueSaturationValue(0, 10, 10),
+                    A.Flip(),
+                    A.RandomGridShuffle(grid=(10, 10)),
+                    A.GridDistortion(),
+                ],
+                p=0.5,
+            ),
+            A.ToFloat(),
+        ]
+    )
 
     dataset = TrainDataset(df, "/datasets/panda/train_64_100", transforms)
     img, label = dataset[0]
