@@ -228,3 +228,12 @@ dmypy.json
 cython_debug/
 
 *.pth
+*.pt
+.idea
+*.csv
+*.zip
+*.tar
+*.gz
+checkpoints
+lightning_logs
+input
