@@ -17,6 +17,8 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.core.lightning import LightningModule
 from pytorch_lightning.callbacks import ModelCheckpoint
 
+import sys
+sys.path.append("../")
 from utils.dataset import TrainDataset
 
 import albumentations as A
