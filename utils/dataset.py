@@ -36,6 +36,58 @@ class TrainDataset(Dataset):
         return img, label
 
 
+class TrainDatasetBinning(Dataset):
+    def __init__(self, df: pd.DataFrame, data_dir: str, transforms=None, tiff_scale=1, sz=128, N=100):
+        self.images = [i + ".png" for i in df["image_id"]]
+        self.labels = [i for i in df["isup_grade"]]
+        self.data_dir = data_dir
+        self.transforms = transforms
+        self.tiff_scale = tiff_scale
+        self.sz = sz
+        self.N = N
+
+    def __len__(self):
+        return len(self.images)
+
+    def _process_by_tiles(self, img):
+        s = int(np.sqrt(self.N))
+        result = np.zeros([self.sz * s, self.sz * s, 3], dtype=np.uint8)
+
+        indexes = np.arange(self.N)
+        np.random.shuffle(indexes)
+
+        for i, j in enumerate(indexes):
+            x = j % s
+            y = j // s
+
+            xo = i % s
+            yo = i // s
+
+            img_i = img[yo * self.sz:(yo + 1) * self.sz, xo * self.sz:(xo + 1) * self.sz]
+            if self.transforms is not None:
+                img_i = self.transforms(image=img_i)["image"]
+
+            if result.dtype != img_i.dtype:
+                result = result.astype(img_i.dtype)
+            result[y * self.sz:(y + 1) * self.sz, x * self.sz:(x + 1) * self.sz] = img_i
+
+        return result
+
+    def __getitem__(self, item):
+        name = self.images[item]
+        path = os.path.join(self.data_dir, name)
+        label = self.labels[item]
+
+        label = np.array([(1 if i < label else 0) for i in range(5)], dtype=np.float32)
+
+        img = cv.imread(path)
+
+        img = self._process_by_tiles(img)
+
+        img = torch.from_numpy(img.transpose(2, 0, 1))
+        return img, label
+
+
 class InferDataset(Dataset):
     def __init__(self, images: list, data_dir: str, tile_size: int, num_tiles: int, tiff_scale=-1, transforms=None):
         self.images = images
@@ -81,20 +133,21 @@ if __name__ == "__main__":
     transforms = A.Compose(
             [
                 A.InvertImg(p=1),
-                A.RandomGridShuffle(grid=(10, 10)),
-                A.RandomSizedCrop([512, 640], 640, 640),
+                A.RandomSizedCrop([100, 128], 128, 128),
+                A.Transpose(),
                 A.Flip(),
-                A.Rotate(15),
-                A.RandomScale(0.1),
-                A.RandomBrightnessContrast(0.2, 0.2),
+                A.Rotate(90),
+                A.RandomBrightnessContrast(0.02, 0.02),
                 A.HueSaturationValue(0, 10, 10),
-                A.PadIfNeeded(640, 640),
-                A.RandomCrop(640, 640),
                 A.Normalize(mean, std, 1),
             ]
         )
 
-    dataset = TrainDataset(df, "/datasets/panda/train_64_100", transforms)
+    # dataset = TrainDataset(df, "/datasets/panda/train_64_100", transforms)
+    dataset = TrainDatasetBinning(pd.read_csv("../input/prostate-cancer-grade-assessment/train.csv"),
+                                  "/datasets/panda/train_128_100",
+                                  transforms,
+                                  1, 128, 100)
 
     # x_tot, x2_tot = [], []
     # for img, _ in tqdm(dataset):
@@ -106,7 +159,7 @@ if __name__ == "__main__":
     # print('mean:', img_avr, ', std:', np.sqrt(img_std))
 
 
-    img, label = dataset[0]
+    img, label = dataset[10000]
     img = img.numpy().transpose(1, 2, 0)
     print(img.min(), img.max())
     img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
