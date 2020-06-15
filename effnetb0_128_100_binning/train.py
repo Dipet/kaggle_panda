@@ -7,7 +7,7 @@ import torch
 from torch.utils.data import DataLoader
 from torch.nn import Linear, Sequential, Dropout, ReLU, BCEWithLogitsLoss
 from torchvision import models
-from torch.optim.lr_scheduler import ReduceLROnPlateau, CosineAnnealingLR
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import cohen_kappa_score
@@ -15,6 +15,8 @@ from sklearn.metrics import cohen_kappa_score
 from pytorch_lightning import Trainer
 from pytorch_lightning.core.lightning import LightningModule
 from pytorch_lightning.callbacks import ModelCheckpoint
+
+from efficientnet_pytorch import EfficientNet
 
 import sys
 sys.path.append("../")
@@ -27,19 +29,19 @@ warnings.filterwarnings("ignore")
 
 NUM_EPOCHS = 32
 SEED = 0
-BATCH_SIZE = 8
-BASE_BATCH = 32
-LR = 1e-4
+BATCH_SIZE = 6
+ACCUM_STEPS = 1
+LR = 3e-4
 MIN_LR = 2e-5
 WEIGHT_DECAY = 2e-5
-FP16 = False
+FP16 = True
 
 mean = [127.66098, 127.66102, 127.66085]
 std = [10.5911, 10.5911045, 10.591107]
 
 NUM_WORKERS = 12
 
-SAVE_NAME = "resnet50_128_100_binning"
+SAVE_NAME = "effnetb0_128_100_binning"
 
 
 def seed_everything(seed):
@@ -58,7 +60,7 @@ seed_everything(SEED)
 class Model(LightningModule):
     def __init__(self, outputs=5):
         super().__init__()
-        self.net = models.resnet18(True)
+        self.net = EfficientNet.from_pretrained('efficientnet-b0')
         self.linear = Sequential(ReLU(), Dropout(),  Linear(1000, outputs))
 
         df = pd.read_csv("../input/prostate-cancer-grade-assessment/train.csv")
@@ -72,8 +74,8 @@ class Model(LightningModule):
                 A.Transpose(),
                 A.Flip(),
                 A.Rotate(90),
-                A.RandomBrightnessContrast(0.02, 0.02),
-                A.HueSaturationValue(0, 10, 10),
+                # A.RandomBrightnessContrast(0.02, 0.02),
+                # A.HueSaturationValue(0, 10, 10),
                 A.Normalize(mean, std, 1),
             ]
         )
@@ -89,18 +91,26 @@ class Model(LightningModule):
         x, y = batch
         y_hat = self(x)
         loss = self.criterion(y_hat, y)
-        tensorboard_logs = {
-            "train_loss": loss,
-        }
         if torch.isnan(loss):
             print()
-        return {"loss": loss, "log": tensorboard_logs}
+        return {"loss": loss, "train_y_true": y, "train_y_pred": y_hat}
 
     def configure_optimizers(self):
         opt = torch.optim.Adam(self.parameters(), lr=LR, weight_decay=WEIGHT_DECAY, eps=2e-5)
         # scheduler = ReduceLROnPlateau(opt, factor=0.5, patience=3, min_lr=MIN_LR, verbose=True)
         scheduler = CosineAnnealingLR(opt, NUM_EPOCHS, MIN_LR)
         return [opt], [scheduler]
+
+    def training_epoch_end(self, outputs):
+        avg_loss = torch.stack([x["loss"] for x in outputs]).mean()
+        y = torch.cat([x["train_y_true"] for x in outputs])
+        y = y.sum(1)
+
+        y_hat = torch.cat([x["train_y_pred"] for x in outputs], 0)
+        y_hat = torch.round(y_hat.sigmoid().sum(1))
+        kappa = cohen_kappa_score(y.detach().cpu().numpy(), y_hat.detach().cpu().numpy(), weights="quadratic")
+        tensorboard_logs = {"loss": avg_loss, "train_kappa": kappa}
+        return {"loss": avg_loss, "log": tensorboard_logs, "train_kappa": torch.tensor(kappa)}
 
     def train_dataloader(self):
         dataset = TrainDatasetBinning(self.train_df, self.data_dir, self.train_transforms, 1, 128, 100)
@@ -131,7 +141,6 @@ class Model(LightningModule):
 
 
 model = Model()
-model =Model.load_from_checkpoint("checkpoints/resnet50_128_100_binningepoch=13_kappa=0.83.ckpt")
 
 # most basic trainer, uses good defaults
 trainer = Trainer(
@@ -141,5 +150,6 @@ trainer = Trainer(
     precision=16 if FP16 else 32,
     checkpoint_callback=ModelCheckpoint(filepath=f"checkpoints/{SAVE_NAME}" + "{epoch}_{kappa:.2f}",
                                         verbose=True, mode="max", monitor="kappa"),
+    accumulate_grad_batches=ACCUM_STEPS
 )
 trainer.fit(model)
