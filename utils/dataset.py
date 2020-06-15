@@ -38,7 +38,7 @@ class TrainDataset(Dataset):
 
 class TrainDatasetBinning(Dataset):
     def __init__(self, df: pd.DataFrame, data_dir: str, transforms=None, tiff_scale=1, sz=128, N=100, random=True):
-        self.images = [i + ".png" for i in df["image_id"]]
+        self.images = [i + ".tiff" for i in df["image_id"]]
         self.labels = [i for i in df["isup_grade"]]
         self.data_dir = data_dir
         self.transforms = transforms
@@ -82,9 +82,10 @@ class TrainDatasetBinning(Dataset):
 
         label = np.array([(1 if i < label else 0) for i in range(5)], dtype=np.float32)
 
-        img = cv.imread(path)
+        img = MultiImage(path)[self.tiff_scale]
+        img = cv.cvtColor(img, cv.COLOR_RGB2BGR)
 
-        img = self._process_by_tiles(img)
+        img = tile(img, self.sz, self.N, self.transforms, self.random)
 
         img = torch.from_numpy(img.transpose(2, 0, 1))
         return img, label
@@ -125,9 +126,9 @@ if __name__ == "__main__":
     import albumentations as A
     from tqdm import tqdm
 
-    df = pd.read_csv("/home/dipet/kaggle/prostate/input/prostate-cancer-grade-assessment/train.csv")
-    with open("../input/compact_representation.json", "r") as file:
-        compact_representation = json.load(file)
+    df = pd.read_csv("../input/prostate-cancer-grade-assessment/train.csv")
+    # with open("../input/compact_representation.json", "r") as file:
+    #     compact_representation = json.load(file)
 
     mean = [127.66098, 127.66102, 127.66085]
     std = [10.5911, 10.5911045, 10.591107]
@@ -135,21 +136,21 @@ if __name__ == "__main__":
     transforms = A.Compose(
             [
                 A.InvertImg(p=1),
-                A.RandomSizedCrop([100, 128], 128, 128),
+                A.RandomSizedCrop([230, 256], 256, 256),
                 A.Transpose(),
                 A.Flip(),
-                A.Rotate(90),
+                A.Rotate(90, border_mode=cv.BORDER_CONSTANT, value=(0, 0, 0)),
                 A.RandomBrightnessContrast(0.02, 0.02),
                 A.HueSaturationValue(0, 10, 10),
-                A.Normalize(mean, std, 1),
+                # A.Normalize(mean, std, 1),
             ]
         )
 
     # dataset = TrainDataset(df, "/datasets/panda/train_64_100", transforms)
     dataset = TrainDatasetBinning(pd.read_csv("../input/prostate-cancer-grade-assessment/train.csv"),
-                                  "/datasets/panda/train_128_100",
+                                  "../input/prostate-cancer-grade-assessment/train_images",
                                   transforms,
-                                  1, 128, 100)
+                                  1, 256, 36)
 
     # x_tot, x2_tot = [], []
     # for img, _ in tqdm(dataset):
