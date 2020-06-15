@@ -37,7 +37,7 @@ class TrainDataset(Dataset):
 
 
 class TrainDatasetBinning(Dataset):
-    def __init__(self, df: pd.DataFrame, data_dir: str, transforms=None, tiff_scale=1, sz=128, N=100):
+    def __init__(self, df: pd.DataFrame, data_dir: str, transforms=None, tiff_scale=1, sz=128, N=100, random=True):
         self.images = [i + ".png" for i in df["image_id"]]
         self.labels = [i for i in df["isup_grade"]]
         self.data_dir = data_dir
@@ -45,6 +45,7 @@ class TrainDatasetBinning(Dataset):
         self.tiff_scale = tiff_scale
         self.sz = sz
         self.N = N
+        self.random = random
 
     def __len__(self):
         return len(self.images)
@@ -54,7 +55,8 @@ class TrainDatasetBinning(Dataset):
         result = np.zeros([self.sz * s, self.sz * s, 3], dtype=np.uint8)
 
         indexes = np.arange(self.N)
-        np.random.shuffle(indexes)
+        if self.random:
+            np.random.shuffle(indexes)
 
         for i, j in enumerate(indexes):
             x = j % s

@@ -6,7 +6,7 @@ def __rotate_image(mat, rotation_mat):
     pass
 
 
-def rotate_image(mat, angle, rect=None):
+def rotate_image(mat, angle, rect=None, default_val=255):
     """
     Rotates an image (angle in degrees) and expands image to avoid cropping
     """
@@ -33,7 +33,7 @@ def rotate_image(mat, angle, rect=None):
     # rotate image with the new bounds and translated rotation matrix
     try:
         rotated_mat = cv.warpAffine(
-            mat, rotation_mat, (bound_w, bound_h), borderMode=cv.BORDER_CONSTANT, borderValue=(255, 255, 255)
+            mat, rotation_mat, (bound_w, bound_h), borderMode=cv.BORDER_CONSTANT, borderValue=(default_val, default_val, default_val)
         )
     except cv.error:
         # very large for warpAffine
@@ -60,7 +60,7 @@ def rect2points(rect, image_shape):
     return tl, br
 
 
-def get_sub_image(image, rect, filter_by_size=True):
+def get_sub_image(image, rect, filter_by_size=True, default_val=255):
     (x1, y1), (x2, y2) = rect2points(rect, image.shape)
 
     sub_image = image[y1:y2, x1:x2]
@@ -81,7 +81,7 @@ def get_sub_image(image, rect, filter_by_size=True):
 
     xy = (x - x1), (y - y1)
     rect = xy, wh, a
-    sub_image, rect = rotate_image(sub_image, a, rect)
+    sub_image, rect = rotate_image(sub_image, a, rect, default_val=default_val)
 
     return get_sub_image(sub_image, rect, filter_by_size)
 
@@ -168,7 +168,7 @@ def get_minimal_image(image):
     return result_img, minimal_boxes
 
 
-def get_compact(image, compact_representation):
+def get_compact(image, compact_representation, default_val=255):
     current_shape = image.shape[:2]
     original_size = compact_representation["original_size"]
 
@@ -187,13 +187,13 @@ def get_compact(image, compact_representation):
         result_shape[0] += int(shape[0])
         result_shape[1] = max(result_shape[1], int(shape[1]))
 
-    result_image = np.full(list(result_shape) + [3], 255, dtype=np.uint8)
+    result_image = np.full(list(result_shape) + [3], default_val, dtype=np.uint8)
 
     offset = 0
     for box in boxes:
         (x, y), (w, h), a = box
         rect = (x * scale_w, y * scale_h), (w * scale_w, h * scale_h), a
-        sub_image = get_sub_image(image, rect, filter_by_size=False)
+        sub_image = get_sub_image(image, rect, filter_by_size=False, default_val=default_val)
         result_image[offset : offset + sub_image.shape[0], : sub_image.shape[1]] = sub_image
         offset += sub_image.shape[0]
 

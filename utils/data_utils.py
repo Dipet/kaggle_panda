@@ -18,7 +18,7 @@ def tile(img, sz=128, N=16, transform=None, random=False):
 
     img = img[idxs]
     s = int(np.sqrt(N))
-    result = np.zeros([sz * s, sz * s, 3], dtype=np.uint8)
+    result = np.full([sz * s, sz * s, 3], 255, dtype=np.uint8)
 
     indexes = np.arange(N)
     if random:
