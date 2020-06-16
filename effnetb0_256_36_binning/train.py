@@ -31,7 +31,7 @@ warnings.filterwarnings("ignore")
 
 NUM_EPOCHS = 32
 SEED = 0
-BATCH_SIZE = 2
+BATCH_SIZE = 4
 ACCUM_STEPS = 1
 LR = 3e-4
 MIN_LR = 2e-5
@@ -43,7 +43,8 @@ NUM_TILES = 36
 mean = [127.66098, 127.66102, 127.66085]
 std = [10.5911, 10.5911045, 10.591107]
 
-NUM_WORKERS = min(BATCH_SIZE, 12) 
+NUM_WORKERS = min(BATCH_SIZE, 12)
+# NUM_WORKERS = 0
 
 SAVE_NAME = "effnetb0_256_36_binning"
 
@@ -101,12 +102,10 @@ class Model(LightningModule):
         x, y = batch
         y_hat = self(x)
         loss = self.criterion(y_hat, y)
-        if torch.isnan(loss):
-            print()
         return {"loss": loss, "train_y_true": y, "train_y_pred": y_hat}
 
     def configure_optimizers(self):
-        opt = torch.optim.Adam(self.parameters(), lr=LR, weight_decay=WEIGHT_DECAY, eps=2e-5)
+        opt = torch.optim.Adam(self.parameters(), lr=LR, eps=2e-5)
         # scheduler = ReduceLROnPlateau(opt, factor=0.5, patience=3, min_lr=MIN_LR, verbose=True)
         scheduler = CosineAnnealingLR(opt, NUM_EPOCHS, MIN_LR)
         return [opt], [scheduler]

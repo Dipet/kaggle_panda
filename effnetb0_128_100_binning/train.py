@@ -146,7 +146,7 @@ model = Model()
 trainer = Trainer(
     gpus=1,
     max_epochs=NUM_EPOCHS,
-    terminate_on_nan=True,
+    # terminate_on_nan=True,
     precision=16 if FP16 else 32,
     checkpoint_callback=ModelCheckpoint(filepath=f"checkpoints/{SAVE_NAME}" + "{epoch}_{kappa:.2f}",
                                         verbose=True, mode="max", monitor="kappa"),

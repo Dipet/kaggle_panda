@@ -91,6 +91,22 @@ class TrainDatasetBinning(Dataset):
         return img, label
 
 
+class TrainDatasetBinningTiled(TrainDatasetBinning):
+    def __getitem__(self, item):
+        name = self.images[item]
+        path = os.path.join(self.data_dir, name)
+        label = self.labels[item]
+
+        label = np.array([(1 if i < label else 0) for i in range(5)], dtype=np.float32)
+
+        img = cv.imread(path.replace(".tiff", ".png"))
+
+        img = self._process_by_tiles(img)
+
+        img = torch.from_numpy(img.transpose(2, 0, 1))
+        return img, label
+
+
 class InferDataset(Dataset):
     def __init__(self, images: list, data_dir: str, tile_size: int, num_tiles: int, tiff_scale=-1, transforms=None):
         self.images = images
@@ -136,7 +152,7 @@ if __name__ == "__main__":
     transforms = A.Compose(
             [
                 A.InvertImg(p=1),
-                A.RandomSizedCrop([230, 256], 256, 256),
+                A.RandomSizedCrop([100, 128], 128, 128),
                 A.Transpose(),
                 A.Flip(),
                 A.Rotate(90, border_mode=cv.BORDER_CONSTANT, value=(0, 0, 0)),
@@ -147,10 +163,10 @@ if __name__ == "__main__":
         )
 
     # dataset = TrainDataset(df, "/datasets/panda/train_64_100", transforms)
-    dataset = TrainDatasetBinning(pd.read_csv("../input/prostate-cancer-grade-assessment/train.csv"),
-                                  "../input/prostate-cancer-grade-assessment/train_images",
-                                  transforms,
-                                  1, 256, 36)
+    dataset = TrainDatasetBinningTiled(pd.read_csv("../input/prostate-cancer-grade-assessment/train.csv"),
+                                     "/datasets/panda/train_128_100/",
+                                     transforms,
+                                     1, 128, 100)
 
     # x_tot, x2_tot = [], []
     # for img, _ in tqdm(dataset):
