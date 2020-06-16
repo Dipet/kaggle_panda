@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from torch.nn import functional
+import cv2 as cv
 
 
 def tile(img, sz=128, N=16, transform=None, random=False):
@@ -94,8 +95,8 @@ def tile_hsv_boxes(img, sz=256, N=36, default_val=255):
     shape = img.shape
     pad0, pad1 = (sz - shape[0] % sz) % sz, (sz - shape[1] % sz) % sz
 
-    img = torch.from_numpy(img).cuda().float()
-    img = 255 - __rgb_to_hsv(img.permute([2, 0, 1]) / 255.0)[1] * 255.0
+    img = cv.cvtColor(img, cv.COLOR_RGB2HSV)[..., 1]
+    img = torch.from_numpy(img).cuda()
     img = torch.unsqueeze(img, -1)
 
     img = functional.pad(img, [0, 0, pad1 // 2, pad1 - pad1 // 2, pad0 // 2, pad0 - pad0 // 2], value=default_val)
