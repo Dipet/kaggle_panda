@@ -87,24 +87,28 @@ def get_tile(img, boxes, sz=256, num=36):
         x = i % s
         y = i // s
 
-        tile[y * sz:(y + 1) * sz, x * sz:(x + 1) * sz] = img[box[1]:box[3], box[0]:box[2]]
+        try:
+            tile[y * sz:(y + 1) * sz, x * sz:(x + 1) * sz] = img[box[1]:box[3], box[0]:box[2]]
+        except Exception:
+            pass
     return tile
 
 
 def tile_hsv_boxes(img, sz=256, N=36, default_val=255):
     shape = img.shape
     pad0, pad1 = (sz - shape[0] % sz) % sz, (sz - shape[1] % sz) % sz
+    num_channels = 1
 
     img = cv.cvtColor(img, cv.COLOR_RGB2HSV)[..., 1]
-    img = torch.from_numpy(img).cuda()
+    img = 255 - torch.from_numpy(img).cuda()
     img = torch.unsqueeze(img, -1)
 
     img = functional.pad(img, [0, 0, pad1 // 2, pad1 - pad1 // 2, pad0 // 2, pad0 - pad0 // 2], value=default_val)
 
     shape = img.shape
 
-    img = img.reshape(img.shape[0] // sz, sz, img.shape[1] // sz, sz, 1)
-    img = img.permute([0, 2, 1, 3, 4]).reshape(-1, sz, sz, 1)
+    img = img.reshape(img.shape[0] // sz, sz, img.shape[1] // sz, sz, num_channels)
+    img = img.permute([0, 2, 1, 3, 4]).reshape(-1, sz, sz, num_channels)
 
     num = len(img)
 
@@ -112,8 +116,8 @@ def tile_hsv_boxes(img, sz=256, N=36, default_val=255):
         img = functional.pad(img, [0, 0, 0, 0, 0, 0, 0, N - len(img)], value=default_val)
 
     idxs = torch.argsort(img.reshape(img.shape[0], -1).float().sum(-1))[:N]
-    del img
 
+    s = int(np.sqrt(N))
     res_boxes = []
     idxs = idxs.detach().cpu().numpy()
 
@@ -129,7 +133,6 @@ def tile_hsv_boxes(img, sz=256, N=36, default_val=255):
         x2 = (x + 1) * sz
         y1 = y * sz
         y2 = (y + 1) * sz
-
-        res_boxes.append([x1, y1, x2, y2])
+        res_boxes.append([int(x1), int(y1), int(x2), int(y2)])
 
     return res_boxes
