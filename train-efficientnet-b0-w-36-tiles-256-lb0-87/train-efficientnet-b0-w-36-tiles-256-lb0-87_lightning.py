@@ -224,8 +224,8 @@ class enetv2(LightningModule):
         qwk_r = cohen_kappa_score(preds[df['data_provider'] == 'radboud'],
                                   df[df['data_provider'] == 'radboud'].isup_grade.values,
                                   weights='quadratic')
-        tensorboard_logs = {"acc": acc, "val_loss": val_loss, "qwk": qwk, "qwk_k": qwk_k, "qwk_r": qwk_r}
-        return {"acc": acc, "val_loss": val_loss, "qwk": qwk, "qwk_k": qwk_k, "qwk_r": qwk_r, "log": tensorboard_logs}
+        tensorboard_logs = {"acc": torch.tensor(acc), "val_loss": torch.tensor(val_loss), "qwk": torch.tensor(qwk), "qwk_k": torch.tensor(qwk_k), "qwk_r": torch.tensor(qwk_r)}
+        return {"acc": torch.tensor(acc), "val_loss": torch.tensor(val_loss), "qwk": torch.tensor(qwk), "qwk_k": torch.tensor(qwk_k), "qwk_r": qwk_r, "log": torch.tensor(tensorboard_logs)}
 
     def configure_optimizers(self):
         optimizer = optim.Adam(model.parameters(), lr=init_lr / warmup_factor)
@@ -244,7 +244,7 @@ class enetv2(LightningModule):
                                                    sampler=RandomSampler(dataset_train), num_workers=num_workers)
         return train_loader
 
-    def  val_dataloader(self):
+    def val_dataloader(self):
         dataset_valid = PANDADataset(self.df_valid, image_size, n_tiles, transform=transforms_val)
         valid_loader = torch.utils.data.DataLoader(dataset_valid, batch_size=batch_size,
                                                    sampler=SequentialSampler(dataset_valid), num_workers=num_workers)
