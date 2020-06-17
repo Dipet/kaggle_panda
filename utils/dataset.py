@@ -163,10 +163,10 @@ if __name__ == "__main__":
         )
 
     # dataset = TrainDataset(df, "/datasets/panda/train_64_100", transforms)
-    dataset = TrainDatasetBinningTiled(pd.read_csv("../input/prostate-cancer-grade-assessment/train.csv"),
-                                     "/datasets/panda/train_128_100/",
+    dataset = TrainDatasetBinning(pd.read_csv("../input/prostate-cancer-grade-assessment/train.csv"),
+                                     "../input/prostate-cancer-grade-assessment/train_images",
                                      transforms,
-                                     1, 128, 100)
+                                     1, 256, 36)
 
     # x_tot, x2_tot = [], []
     # for img, _ in tqdm(dataset):

@@ -31,7 +31,7 @@ warnings.filterwarnings("ignore")
 
 NUM_EPOCHS = 32
 SEED = 0
-BATCH_SIZE = 4
+BATCH_SIZE = 1
 ACCUM_STEPS = 1
 LR = 3e-4
 MIN_LR = 2e-5
@@ -44,7 +44,7 @@ mean = [127.66098, 127.66102, 127.66085]
 std = [10.5911, 10.5911045, 10.591107]
 
 NUM_WORKERS = min(BATCH_SIZE, 12)
-# NUM_WORKERS = 0
+NUM_WORKERS = 0
 
 SAVE_NAME = "effnetb0_256_36_binning"
 
@@ -65,12 +65,14 @@ seed_everything(SEED)
 class Model(LightningModule):
     def __init__(self, outputs=5):
         super().__init__()
-        self.net = EfficientNet.from_pretrained('efficientnet-b0')
+        self.net = EfficientNet.from_pretrained('efficientnet-b1')
         self.linear = Sequential(ReLU(), Dropout(),  Linear(1000, outputs))
 
         df = pd.read_csv("../input/prostate-cancer-grade-assessment/train.csv")
+        self.data_dir = "../input/256_36_hsv"
+        paths = [os.path.splitext(i)[0] for i in os.listdir(self.data_dir)]
+        df = df[[(True if i in paths else False) for i in df['image_id']]]
         self.train_df, self.valid_df = train_test_split(df, test_size=0.2)
-        self.data_dir = "../input/prostate-cancer-grade-assessment/train_images"
 
         self.train_transforms = A.Compose(
             [
