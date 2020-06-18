@@ -25,20 +25,31 @@ from pytorch_lightning.core.lightning import LightningModule
 import random
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint
+from torchvision.models import resnet101
 
-SAVE_NAME = "effnetb0_256_36_lb087"
+import sys
+sys.path.append("../")
+from utils.data_utils import get_tiles_new
+import json
+
+resnet101(True)
+
+SAVE_NAME = "effnetb4_256_36_new"
 FP16 = True
-batch_size = 6
-num_workers = min(batch_size, 8)
+batch_size = 2
+num_workers = 8
 ACCUM_STEPS = 1
 
 data_dir = '../input/prostate-cancer-grade-assessment'
 df_train = pd.read_csv(os.path.join(data_dir, 'train.csv'))
 image_folder = os.path.join(data_dir, 'train_images')
 
-kernel_type = 'how_to_train_effnet_b0_to_get_LB_0.86'
+with open("../notebooks/new_boxes_256_36.json", "r") as file:
+    boxes_info = json.load(file)
 
-enet_type = 'efficientnet-b0'
+kernel_type = SAVE_NAME
+
+enet_type = 'efficientnet-b4'
 fold = 0
 tile_size = 256
 image_size = 256
@@ -81,33 +92,6 @@ def seed_everything(seed):
 seed_everything(0)
 
 
-def get_tiles(img, mode=0):
-    result = []
-    h, w, c = img.shape
-    pad_h = (tile_size - h % tile_size) % tile_size + ((tile_size * mode) // 2)
-    pad_w = (tile_size - w % tile_size) % tile_size + ((tile_size * mode) // 2)
-
-    img2 = np.pad(img, [[pad_h // 2, pad_h - pad_h // 2], [pad_w // 2, pad_w - pad_w // 2], [0, 0]],
-                  constant_values=255)
-    img3 = img2.reshape(
-        img2.shape[0] // tile_size,
-        tile_size,
-        img2.shape[1] // tile_size,
-        tile_size,
-        3
-    )
-
-    img3 = img3.transpose(0, 2, 1, 3, 4).reshape(-1, tile_size, tile_size, 3)
-    n_tiles_with_info = (img3.reshape(img3.shape[0], -1).sum(1) < tile_size ** 2 * 3 * 255).sum()
-    if len(img3) < n_tiles:
-        img3 = np.pad(img3, [[0, n_tiles - len(img3)], [0, 0], [0, 0], [0, 0]], constant_values=255)
-    idxs = np.argsort(img3.reshape(img3.shape[0], -1).sum(-1))[:n_tiles]
-    img3 = img3[idxs]
-    for i in range(len(img3)):
-        result.append({'img': img3[i], 'idx': i})
-    return result, n_tiles_with_info >= n_tiles
-
-
 class PANDADataset(Dataset):
     def __init__(self,
                  df,
@@ -134,39 +118,44 @@ class PANDADataset(Dataset):
 
         tiff_file = os.path.join(image_folder, f'{img_id}.tiff')
         image = skimage.io.MultiImage(tiff_file)[1]
-        tiles, OK = get_tiles(image, self.tile_mode)
 
-        if self.rand:
-            idxes = np.random.choice(list(range(self.n_tiles)), self.n_tiles, replace=False)
-        else:
-            idxes = list(range(self.n_tiles))
+        data = boxes_info[img_id]
+
+        tiles = get_tiles_new(image, np.array(data['boxes']), np.array(data['sums']),
+                              self.image_size, self.n_tiles, random=self.rand)
 
         n_row_tiles = int(np.sqrt(self.n_tiles))
         images = np.zeros((image_size * n_row_tiles, image_size * n_row_tiles, 3))
         for h in range(n_row_tiles):
             for w in range(n_row_tiles):
-                i = h * n_row_tiles + w
+                h1 = h * image_size
+                w1 = w * image_size
+                this_img = tiles[h1:h1 + image_size, w1:w1 + image_size]
 
-                if len(tiles) > idxes[i]:
-                    this_img = tiles[idxes[i]]['img']
-                else:
-                    this_img = np.ones((self.image_size, self.image_size, 3)).astype(np.uint8) * 255
                 this_img = 255 - this_img
                 if self.transform is not None:
                     this_img = self.transform(image=this_img)['image']
-                h1 = h * image_size
-                w1 = w * image_size
                 images[h1:h1 + image_size, w1:w1 + image_size] = this_img
 
         if self.transform is not None:
             images = self.transform(image=images)['image']
         images = images.astype(np.float32)
-        images /= 255
+        images *= 1 / 255
         images = images.transpose(2, 0, 1)
 
         label = np.zeros(5).astype(np.float32)
         label[:row.isup_grade] = 1.
         return torch.tensor(images), torch.tensor(label)
+
+# np.random.seed(1)
+# train_idx = np.where((df_train['fold'] != fold))[0]
+# df_this = df_train.loc[train_idx]
+# dataset_train = PANDADataset(df_this, image_size, n_tiles, transform=transforms_train, rand=True)
+# img, label = dataset_train[0]
+# img = img.numpy().transpose(1, 2, 0)
+# plt.imshow(img)
+# plt.show()
+# exit()
 
 
 class enetv2(LightningModule):
@@ -239,7 +228,7 @@ class enetv2(LightningModule):
     def train_dataloader(self):
         train_idx = np.where((df_train['fold'] != fold))[0]
         df_this = df_train.loc[train_idx]
-        dataset_train = PANDADataset(df_this, image_size, n_tiles, transform=transforms_train)
+        dataset_train = PANDADataset(df_this, image_size, n_tiles, transform=transforms_train, rand=True)
         train_loader = torch.utils.data.DataLoader(dataset_train, batch_size=batch_size,
                                                    sampler=RandomSampler(dataset_train), num_workers=num_workers)
         return train_loader
@@ -259,8 +248,8 @@ trainer = Trainer(
     max_epochs=n_epochs,
     terminate_on_nan=True,
     precision=16 if FP16 else 32,
-    checkpoint_callback=ModelCheckpoint(filepath=f"checkpoints/{SAVE_NAME}" + "{epoch}_{qwk:.2f}",
-                                        verbose=True, mode="max", monitor="qwk"),
+    checkpoint_callback=ModelCheckpoint(filepath=f"checkpoints/{SAVE_NAME}" + "{epoch}_{kappa:.2f}",
+                                        verbose=True, mode="max", monitor="kappa"),
     accumulate_grad_batches=ACCUM_STEPS
 )
 trainer.fit(model)
